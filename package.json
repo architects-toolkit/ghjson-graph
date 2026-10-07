@@ -1,0 +1,24 @@
+{
+  "name": "@architects-toolkit/ghjson-graph",
+  "version": "0.1.0",
+  "description": "Standalone GhJSON dependency-graph parser, stats, and SVG thumbnail renderer",
+  "type": "module",
+  "license": "LGPL-3.0-only",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --import tsx --test test/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": { "node": ">=20" }
+}
