@@ -1,0 +1,45 @@
+name: spec-sync
+
+on:
+  schedule:
+    # Weekly, Mondays 05:30 UTC
+    - cron: '30 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Fetch spec schema set + regenerate types
+        run: node scripts/sync-schema.mjs
+
+      - name: Open a PR when the vendored schema drifted
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: bot/spec-sync
+          delete-branch: true
+          title: 'chore(schema): sync vendored GhJSON schema with published spec'
+          body: |
+            The published GhJSON schema set at
+            https://architects-toolkit.github.io/ghjson-spec/schema/v1.0/
+            changed since the last sync. This PR refreshes the vendored copy
+            under `schema/` and regenerates `src/schema-types.ts`
+            (`node scripts/sync-schema.mjs`).
+          labels: dependencies

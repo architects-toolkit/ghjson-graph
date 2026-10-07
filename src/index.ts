@@ -12,6 +12,8 @@ export {
 export { graphStats, type GraphStats } from './stats.js'
 export { layoutGraph, type LayoutResult } from './layout.js'
 export { renderGraphSvg, type RenderOptions } from './svg.js'
+export { validateGhJsonDocument, type ValidationIssue } from './validate.js'
+export { ghJsonSchema } from './schema-types.js'
 
 import { parseGhJsonGraph, type GhJsonDocument } from './graph.js'
 import { graphStats, type GraphStats } from './stats.js'

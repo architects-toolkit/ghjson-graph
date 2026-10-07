@@ -8,43 +8,15 @@
  * as boundary edges, not dropped.
  */
 
-export interface GhJsonComponentWire {
-  id?: number
-  name?: string
-  library?: string
-  nickName?: string
-  componentGuid?: string
-  instanceGuid?: string
-  pivot?: string | { x: number; y: number }
-  inputSettings?: unknown[]
-  outputSettings?: unknown[]
-}
+import type { ComponentData, ConnectionData, GhJSONDocument, GroupData } from './schema-types.js'
+import { validateGhJsonDocument } from './validate.js'
 
-export interface GhJsonConnectionWire {
-  from: { id?: number; paramIndex?: number; paramName?: string }
-  to: { id?: number; paramIndex?: number; paramName?: string }
-  boundary?: boolean
-}
-
-export interface GhJsonGroupWire {
-  name?: string
-  color?: string
-  members?: number[]
-}
-
-export interface GhJsonDocument {
-  schema?: string
-  metadata?: {
-    description?: string
-    author?: string
-    version?: string
-    dependencies?: string[]
-    [key: string]: unknown
-  }
-  components: GhJsonComponentWire[]
-  connections?: GhJsonConnectionWire[]
-  groups?: GhJsonGroupWire[]
-}
+// Wire types are generated from the vendored spec schema (schema-types.ts);
+// the aliases below keep the parser's public names stable.
+export type GhJsonComponentWire = ComponentData
+export type GhJsonConnectionWire = ConnectionData
+export type GhJsonGroupWire = GroupData
+export type GhJsonDocument = GhJSONDocument
 
 export interface GraphNode {
   id: number
@@ -101,11 +73,20 @@ function parsePivot(pivot: GhJsonComponentWire['pivot']): { x?: number; y?: numb
 /**
  * Parse a GhJSON document (object or JSON string) into a dependency graph.
  * Throws GhJsonParseError when the document is not a components array.
+ * `options.strict` additionally validates the document against the vendored
+ * GhJSON JSON Schema before parsing (tolerant by default — real-world
+ * documents can be partial).
  */
-export function parseGhJsonGraph(input: GhJsonDocument | string): Graph {
+export function parseGhJsonGraph(input: GhJsonDocument | string, options?: { strict?: boolean }): Graph {
   const doc: GhJsonDocument = typeof input === 'string' ? JSON.parse(input) : input
   if (!doc || !Array.isArray(doc.components)) {
     throw new GhJsonParseError('GhJSON document must have a components array')
+  }
+  if (options?.strict) {
+    const issues = validateGhJsonDocument(doc)
+    if (issues.length) {
+      throw new GhJsonParseError(`GhJSON document failed schema validation: ${issues[0].message}${issues.length > 1 ? ` (+${issues.length - 1} more)` : ''}`)
+    }
   }
 
   const nodes = new Map<number, GraphNode>()

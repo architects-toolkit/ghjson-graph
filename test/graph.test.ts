@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { parseGhJsonGraph, graphStats, renderGraphSvg, ghJsonCard, GhJsonParseError, layoutGraph } from '../src/index.js'
+import { parseGhJsonGraph, graphStats, renderGraphSvg, ghJsonCard, GhJsonParseError, layoutGraph, validateGhJsonDocument } from '../src/index.js'
 
 const sample = {
   schema: '1.0',
@@ -109,6 +109,34 @@ describe('renderGraphSvg', () => {
     const svg = renderGraphSvg(parseGhJsonGraph({ components: [] }))
     assert.ok(svg.startsWith('<svg'))
     assert.ok(!svg.includes('<circle'))
+  })
+})
+
+describe('schema validation', () => {
+  it('rejects schema-invalid documents in strict mode and stays tolerant by default', () => {
+    const invalid = { components: [{ bogus: true }], connections: 'nope' }
+    assert.throws(() => parseGhJsonGraph(invalid as never, { strict: true }), GhJsonParseError)
+    // Tolerant mode parses what it can.
+    const graph = parseGhJsonGraph(invalid as never)
+    assert.equal(graph.nodes.size, 1)
+  })
+
+  it('validates a conforming document and reports issues with paths', () => {
+    const doc = {
+      schema: '1.0',
+      components: [{ id: 1, name: 'Addition' }],
+      connections: [
+        {
+          from: { id: 1, paramName: 'Result', paramIndex: 0 },
+          to: { id: 2, paramName: 'A', paramIndex: 0 },
+          boundary: true,
+        },
+      ],
+    }
+    assert.equal(validateGhJsonDocument(doc).length, 0)
+    const issues = validateGhJsonDocument({ components: 'x' })
+    assert.ok(issues.length > 0)
+    assert.ok(issues[0].path.length > 0)
   })
 })
 
