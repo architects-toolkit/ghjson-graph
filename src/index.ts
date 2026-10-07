@@ -10,6 +10,7 @@ export {
   type GraphEdge,
 } from './graph.js'
 export { graphStats, type GraphStats } from './stats.js'
+export { layoutGraph, type LayoutResult } from './layout.js'
 export { renderGraphSvg, type RenderOptions } from './svg.js'
 
 import { parseGhJsonGraph, type GhJsonDocument } from './graph.js'

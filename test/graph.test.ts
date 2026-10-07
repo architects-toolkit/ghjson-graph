@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { parseGhJsonGraph, graphStats, renderGraphSvg, ghJsonCard, GhJsonParseError } from '../src/index.js'
+import { parseGhJsonGraph, graphStats, renderGraphSvg, ghJsonCard, GhJsonParseError, layoutGraph } from '../src/index.js'
 
 const sample = {
   schema: '1.0',
@@ -68,18 +68,47 @@ describe('graphStats', () => {
   })
 })
 
+describe('layoutGraph', () => {
+  it('layers sources left and sinks right in reading order', () => {
+    const layout = layoutGraph(parseGhJsonGraph(sample))
+    // 1, 2 (sliders) → col 0; 3 (Addition) → col 1; 4 (Panel) → col 2
+    assert.equal(layout.depth, 3)
+    assert.deepEqual(layout.positions.get(1), { col: 0, row: 0 })
+    assert.deepEqual(layout.positions.get(2), { col: 0, row: 1 })
+    assert.deepEqual(layout.positions.get(3), { col: 1, row: 0 })
+    assert.deepEqual(layout.positions.get(4), { col: 2, row: 0 })
+  })
+
+  it('tolerates cycles and isolates unconnected nodes at the left', () => {
+    const layout = layoutGraph(parseGhJsonGraph({
+      components: [{ id: 1, name: 'A' }, { id: 2, name: 'B' }, { id: 3, name: 'C' }],
+      connections: [{ from: { id: 1 }, to: { id: 2 } }, { from: { id: 2 }, to: { id: 1 } }],
+    }))
+    assert.equal(layout.positions.size, 3)
+    assert.ok(layout.depth >= 2)
+    assert.equal(layout.positions.get(3)!.col, 0)
+  })
+})
+
 describe('renderGraphSvg', () => {
-  it('renders a self-contained svg with nodes and edges', () => {
+  it('renders a transparent layered svg with nodes and edges', () => {
     const svg = renderGraphSvg(parseGhJsonGraph(sample))
     assert.ok(svg.startsWith('<svg'))
     assert.ok(svg.includes('<circle'))
     assert.ok(svg.includes('<line'))
-    assert.ok(svg.includes('stroke-dasharray')) // boundary edge
+    assert.ok(!svg.includes('<rect')) // transparent background
+    assert.ok(!svg.includes('fill="#101418"'))
   })
 
-  it('falls back to a grid when pivots are missing', () => {
+  it('renders edgeless components in a single column', () => {
     const svg = renderGraphSvg(parseGhJsonGraph({ components: [{ name: 'A' }, { name: 'B' }] }))
     assert.ok(svg.includes('<circle'))
+  })
+
+  it('renders an empty transparent svg for an empty graph', () => {
+    const svg = renderGraphSvg(parseGhJsonGraph({ components: [] }))
+    assert.ok(svg.startsWith('<svg'))
+    assert.ok(!svg.includes('<circle'))
   })
 })
 
