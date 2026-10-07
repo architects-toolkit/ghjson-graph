@@ -1,0 +1,131 @@
+{
+ "components": [
+  {
+   "id": 1,
+   "name": "Number",
+   "outputSettings": [
+    {}
+   ]
+  },
+  {
+   "id": 2,
+   "name": "A",
+   "inputSettings": [
+    {}
+   ],
+   "outputSettings": [
+    {}
+   ]
+  },
+  {
+   "id": 3,
+   "name": "B",
+   "inputSettings": [
+    {}
+   ],
+   "outputSettings": [
+    {}
+   ]
+  },
+  {
+   "id": 4,
+   "name": "Join",
+   "inputSettings": [
+    {},
+    {}
+   ],
+   "outputSettings": [
+    {}
+   ]
+  },
+  {
+   "id": 5,
+   "name": "Out",
+   "inputSettings": [
+    {}
+   ]
+  },
+  {
+   "id": 6,
+   "name": "LoopBack",
+   "inputSettings": [
+    {}
+   ],
+   "outputSettings": [
+    {}
+   ]
+  }
+ ],
+ "connections": [
+  {
+   "from": {
+    "id": 1,
+    "paramIndex": 0
+   },
+   "to": {
+    "id": 2,
+    "paramIndex": 0
+   }
+  },
+  {
+   "from": {
+    "id": 1,
+    "paramIndex": 0
+   },
+   "to": {
+    "id": 3,
+    "paramIndex": 0
+   }
+  },
+  {
+   "from": {
+    "id": 2,
+    "paramIndex": 0
+   },
+   "to": {
+    "id": 4,
+    "paramIndex": 0
+   }
+  },
+  {
+   "from": {
+    "id": 3,
+    "paramIndex": 0
+   },
+   "to": {
+    "id": 4,
+    "paramIndex": 1
+   }
+  },
+  {
+   "from": {
+    "id": 4,
+    "paramIndex": 0
+   },
+   "to": {
+    "id": 5,
+    "paramIndex": 0
+   }
+  },
+  {
+   "from": {
+    "id": 4,
+    "paramIndex": 0
+   },
+   "to": {
+    "id": 6,
+    "paramIndex": 0
+   }
+  },
+  {
+   "from": {
+    "id": 6,
+    "paramIndex": 0
+   },
+   "to": {
+    "id": 2,
+    "paramIndex": 0
+   }
+  }
+ ]
+}

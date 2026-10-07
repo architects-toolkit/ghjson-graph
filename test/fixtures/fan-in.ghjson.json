@@ -1,0 +1,85 @@
+{
+ "components": [
+  {
+   "id": 1,
+   "name": "Slider",
+   "nickName": "Length",
+   "library": "Params",
+   "outputSettings": [
+    {}
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Slider",
+   "nickName": "Height",
+   "library": "Params",
+   "outputSettings": [
+    {}
+   ]
+  },
+  {
+   "id": 3,
+   "name": "Addition",
+   "library": "Maths",
+   "inputSettings": [
+    {},
+    {}
+   ],
+   "outputSettings": [
+    {}
+   ]
+  },
+  {
+   "id": 4,
+   "name": "Panel",
+   "library": "Params",
+   "inputSettings": [
+    {}
+   ]
+  }
+ ],
+ "connections": [
+  {
+   "from": {
+    "id": 1,
+    "paramIndex": 0
+   },
+   "to": {
+    "id": 3,
+    "paramIndex": 0
+   }
+  },
+  {
+   "from": {
+    "id": 2,
+    "paramIndex": 0
+   },
+   "to": {
+    "id": 3,
+    "paramIndex": 1
+   }
+  },
+  {
+   "from": {
+    "id": 3,
+    "paramIndex": 0
+   },
+   "to": {
+    "id": 4,
+    "paramIndex": 0
+   }
+  },
+  {
+   "from": {
+    "id": 99,
+    "paramIndex": 0
+   },
+   "to": {
+    "id": 4,
+    "paramIndex": 0
+   },
+   "boundary": true
+  }
+ ]
+}
