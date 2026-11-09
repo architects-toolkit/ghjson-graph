@@ -167,6 +167,7 @@ describe('tolerant connection parsing', () => {
       ['componentId key', [{ from: { componentId: 1 }, to: { componentId: 3 } }]],
       ['component_id key', [{ from: { component_id: 1 }, to: { component_id: 3 } }]],
       ['string ids', [{ from: { id: '1' }, to: { id: '3' } }]],
+      ['guid in id key', [{ from: { id: '11111111-1111-1111-1111-111111111111' }, to: { id: '33333333-3333-3333-3333-333333333333' } }]],
       ['instanceGuid endpoints', [{ from: { instanceGuid: '11111111-1111-1111-1111-111111111111' }, to: { instanceGuid: '33333333-3333-3333-3333-333333333333' } }]],
       ['instance_guid endpoints', [{ from: { instance_guid: '11111111-1111-1111-1111-111111111111' }, to: { instance_guid: '33333333-3333-3333-3333-333333333333' } }]],
       ['guid endpoints', [{ from: { guid: '11111111-1111-1111-1111-111111111111' }, to: { guid: '33333333-3333-3333-3333-333333333333' } }]],
