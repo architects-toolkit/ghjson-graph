@@ -233,7 +233,8 @@ function resolveEndpoint(endpoint: unknown, idByInstanceGuid: Map<string, number
   const paramIndex = PARAM_INDEX_KEYS.map(k => o[k]).find(v => typeof v === 'number' && Number.isFinite(v)) as number | undefined
   const paramName = PARAM_NAME_KEYS.map(k => o[k]).find(v => typeof v === 'string' && v !== '') as string | undefined
   for (const key of ENDPOINT_ID_KEYS) {
-    const id = coerceComponentId(o[key])
+    const v = o[key]
+    const id = coerceComponentId(v) ?? (typeof v === 'string' && v ? idByInstanceGuid.get(v.toLowerCase()) : undefined)
     if (id !== undefined) return { id, paramIndex: paramIndex ?? null, paramName: paramName ?? null }
   }
   for (const key of ENDPOINT_GUID_KEYS) {
