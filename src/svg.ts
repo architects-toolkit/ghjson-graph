@@ -4,10 +4,15 @@ import { layoutGraph } from './layout.js'
 export interface RenderOptions {
   /** Output width; height follows the laid-out graph's aspect ratio. */
   width?: number
-  /** Palette for strokes on a dark or light page. Background is always transparent. */
+  /** Palette for strokes on a dark or light page. */
   theme?: 'dark' | 'light'
   /** Padding inside the viewport. */
   padding?: number
+  /**
+   * Optional background fill (e.g. '#f8fafc') drawn behind the topology —
+   * the SVG stays transparent when omitted so cards can own their backdrop.
+   */
+  background?: string
 }
 
 const escapeXml = (value: string) =>
@@ -51,17 +56,20 @@ export function renderGraphSvg(graph: Graph, options: RenderOptions = {}): strin
   const edgeColor = dark ? '#5b6a7d' : '#94a3b8'
   const nodeColor = dark ? '#8fb8d8' : '#3b6d94'
   const boundaryColor = dark ? '#4b5563' : '#b6c2cf'
-  const nodeR = Math.max(1.6, Math.min(4.5, 26 * scale / Math.max(layout.height, 1) ** 0.5))
+  const nodeR = Math.max(2.2, Math.min(6, 30 * scale / Math.max(layout.height, 1) ** 0.5))
 
   const parts: string[] = [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" preserveAspectRatio="xMidYMid meet">`,
   ]
+  if (options.background) {
+    parts.push(`<rect width="${width}" height="${height}" fill="${options.background}" rx="6"/>`)
+  }
   for (const edge of graph.edges) {
     const a = at(edge.from)
     const b = at(edge.to)
     if (!a || !b) continue
     const stroke = edge.boundary ? boundaryColor : edgeColor
-    parts.push(`<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${stroke}" stroke-opacity="0.65" stroke-width="1" ${edge.boundary ? 'stroke-dasharray="2 3" ' : ''}/>`)
+    parts.push(`<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${stroke}" stroke-opacity="0.85" stroke-width="1.5" ${edge.boundary ? 'stroke-dasharray="2 3" ' : ''}/>`)
   }
   for (const [id] of layout.positions) {
     const p = at(id)

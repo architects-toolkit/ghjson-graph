@@ -2,6 +2,12 @@ import type { Graph } from './graph.js'
 
 export interface GraphStats {
   components: number
+  /**
+   * Drawable edges — both endpoints resolve to a component in this document
+   * (`boundary`-flagged edges still count when they resolve; they render
+   * dashed). Edges pointing outside the document count under `boundaryEdges`,
+   * entries that never parsed under `skippedConnections`.
+   */
   connections: number
   groups: number
   /** Distinct component libraries used (e.g. "Maths", "Sets"). */
@@ -14,17 +20,17 @@ export interface GraphStats {
   sinks: number
   /** Longest directed path length (edges); 0 for empty/cyclic-only graphs. */
   longestPath: number
-  /** Edges referencing components outside this document. */
+  /** Edges referencing components outside this document — never drawable. */
   boundaryEdges: number
+  /** Declared connection entries dropped before edge creation (unrecognised shape). */
+  skippedConnections: number
 }
 
 export function graphStats(graph: Graph): GraphStats {
   const inDegree = new Map<number, number>()
   const outDegree = new Map<number, number>()
   for (const id of graph.nodes.keys()) { inDegree.set(id, 0); outDegree.set(id, 0) }
-  let boundaryEdges = 0
   for (const edge of graph.edges) {
-    if (edge.boundary) boundaryEdges++
     if (graph.nodes.has(edge.to)) inDegree.set(edge.to, (inDegree.get(edge.to) ?? 0) + 1)
     if (graph.nodes.has(edge.from)) outDegree.set(edge.from, (outDegree.get(edge.from) ?? 0) + 1)
   }
@@ -57,13 +63,14 @@ export function graphStats(graph: Graph): GraphStats {
 
   return {
     components: graph.nodes.size,
-    connections: graph.edges.length,
+    connections: internal.length,
     groups: graph.groups.length,
     libraries,
     dependencies: graph.metadata?.dependencies ?? [],
     sources: [...inDegree.values()].filter(d => d === 0).length,
     sinks: [...outDegree.values()].filter(d => d === 0).length,
     longestPath,
-    boundaryEdges,
+    boundaryEdges: graph.edges.length - internal.length,
+    skippedConnections: graph.skippedConnections ?? 0,
   }
 }
