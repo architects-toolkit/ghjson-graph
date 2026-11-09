@@ -171,6 +171,8 @@ describe('tolerant connection parsing', () => {
       ['instance_guid endpoints', [{ from: { instance_guid: '11111111-1111-1111-1111-111111111111' }, to: { instance_guid: '33333333-3333-3333-3333-333333333333' } }]],
       ['guid endpoints', [{ from: { guid: '11111111-1111-1111-1111-111111111111' }, to: { guid: '33333333-3333-3333-3333-333333333333' } }]],
       ['bare numbers', [{ from: 1, to: 3 }]],
+      ['bare string ids', [{ from: '1', to: '3' }]],
+      ['bare guid strings', [{ from: '11111111-1111-1111-1111-111111111111', to: '33333333-3333-3333-3333-333333333333' }]],
       ['flat ids', [{ from_id: 1, to_id: 3 }]],
       ['source/target', [{ source: { id: 1 }, target: { id: 3 } }]],
       ['src/dst', [{ src: { id: 1 }, dst: { id: 3 } }]],

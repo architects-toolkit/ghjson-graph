@@ -216,12 +216,17 @@ interface ResolvedEndpoint {
  * `{ id }` plus the spellings AI writers and exporters actually emit:
  * `{ component|componentId|component_id|componentIndex }`, bare numbers,
  * `{ instanceGuid|instance_guid|guid }` (mapped through the components'
- * instanceGuid → id), and numeric strings. Returns null when nothing usable
+ * instanceGuid → id), bare numbers, and bare strings (numeric or
+ * instanceGuid). Returns null when nothing usable
  * is found — the caller counts it as a skipped connection.
  */
 function resolveEndpoint(endpoint: unknown, idByInstanceGuid: Map<string, number>): ResolvedEndpoint | null {
   if (typeof endpoint === 'number' && Number.isFinite(endpoint)) {
     return { id: endpoint, paramIndex: null, paramName: null }
+  }
+  if (typeof endpoint === 'string' && endpoint) {
+    const id = coerceComponentId(endpoint) ?? idByInstanceGuid.get(endpoint.toLowerCase())
+    return id === undefined ? null : { id, paramIndex: null, paramName: null }
   }
   if (!endpoint || typeof endpoint !== 'object') return null
   const o = endpoint as Record<string, unknown>
