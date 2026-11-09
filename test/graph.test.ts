@@ -48,12 +48,13 @@ describe('graphStats', () => {
   it('computes topology stats', () => {
     const stats = graphStats(parseGhJsonGraph(sample))
     assert.equal(stats.components, 4)
-    assert.equal(stats.connections, 4)
+    assert.equal(stats.connections, 3) // drawable edges only — the boundary ref is not a wire
     assert.equal(stats.groups, 1)
     assert.equal(stats.sources, 2)
     assert.equal(stats.sinks, 1)
     assert.equal(stats.longestPath, 2)
     assert.equal(stats.boundaryEdges, 1)
+    assert.equal(stats.skippedConnections, 0)
     assert.deepEqual(stats.dependencies, ['Kangaroo2'])
     assert.deepEqual(stats.libraries, ['Maths', 'Params'])
   })
@@ -96,8 +97,15 @@ describe('renderGraphSvg', () => {
     assert.ok(svg.startsWith('<svg'))
     assert.ok(svg.includes('<circle'))
     assert.ok(svg.includes('<line'))
-    assert.ok(!svg.includes('<rect')) // transparent background
+    assert.ok(!svg.includes('<rect')) // transparent by default
     assert.ok(!svg.includes('fill="#101418"'))
+  })
+
+  it('paints a themed background rect when asked', () => {
+    const svg = renderGraphSvg(parseGhJsonGraph(sample), { theme: 'light', background: '#f8fafc' })
+    assert.ok(svg.includes('<rect width="320"'))
+    assert.ok(svg.includes('fill="#f8fafc"'))
+    assert.ok(svg.indexOf('<rect') < svg.indexOf('<line')) // background sits under the wires
   })
 
   it('renders edgeless components in a single column', () => {
@@ -137,6 +145,81 @@ describe('schema validation', () => {
     const issues = validateGhJsonDocument({ components: 'x' })
     assert.ok(issues.length > 0)
     assert.ok(issues[0].path.length > 0)
+  })
+})
+
+describe('tolerant connection parsing', () => {
+  /** Canonical doc with ids 1-4; each case mutates only the connection shape. */
+  const withConns = (conns: unknown) => ({
+    components: [
+      { id: 1, name: 'A', instanceGuid: '11111111-1111-1111-1111-111111111111' },
+      { id: 2, name: 'B', instanceGuid: '22222222-2222-2222-2222-222222222222' },
+      { id: 3, name: 'C', instanceGuid: '33333333-3333-3333-3333-333333333333' },
+    ],
+    connections: conns,
+  })
+  const conn = (from: number, to: number) => ({ from: { id: from }, to: { id: to } })
+  const parsedEdges = (doc: unknown) => parseGhJsonGraph(doc as never).edges.map(e => `${e.from}>${e.to}`)
+
+  it('resolves the endpoint spellings producers actually emit', () => {
+    const variants: [string, unknown][] = [
+      ['component key', [{ from: { component: 1 }, to: { component: 3 } }]],
+      ['componentId key', [{ from: { componentId: 1 }, to: { componentId: 3 } }]],
+      ['component_id key', [{ from: { component_id: 1 }, to: { component_id: 3 } }]],
+      ['string ids', [{ from: { id: '1' }, to: { id: '3' } }]],
+      ['instanceGuid endpoints', [{ from: { instanceGuid: '11111111-1111-1111-1111-111111111111' }, to: { instanceGuid: '33333333-3333-3333-3333-333333333333' } }]],
+      ['instance_guid endpoints', [{ from: { instance_guid: '11111111-1111-1111-1111-111111111111' }, to: { instance_guid: '33333333-3333-3333-3333-333333333333' } }]],
+      ['guid endpoints', [{ from: { guid: '11111111-1111-1111-1111-111111111111' }, to: { guid: '33333333-3333-3333-3333-333333333333' } }]],
+      ['bare numbers', [{ from: 1, to: 3 }]],
+      ['flat ids', [{ from_id: 1, to_id: 3 }]],
+      ['source/target', [{ source: { id: 1 }, target: { id: 3 } }]],
+      ['src/dst', [{ src: { id: 1 }, dst: { id: 3 } }]],
+    ]
+    for (const [name, conns] of variants) {
+      assert.deepEqual(parsedEdges(withConns(conns)), ['1>3'], name)
+    }
+  })
+
+  it('reads wires/links/edges aliases and object-map connection lists', () => {
+    for (const key of ['wires', 'links', 'edges']) {
+      assert.deepEqual(parsedEdges({ ...withConns(undefined), [key]: [conn(1, 3)] }), ['1>3'], key)
+    }
+    assert.deepEqual(parsedEdges(withConns({ '0': conn(1, 3) })), ['1>3'])
+  })
+
+  it('falls back to per-component inputs entries when no top-level list exists', () => {
+    const doc = {
+      components: [{ id: 1, name: 'A' }, { id: 2, name: 'B', inputs: [{ from: { id: 1 } }] }],
+    }
+    assert.deepEqual(parsedEdges(doc), ['1>2'])
+  })
+
+  it('counts unresolvable entries as skippedConnections instead of dropping them silently', () => {
+    const graph = parseGhJsonGraph(withConns([
+      conn(1, 3),                      // good
+      { from: { foo: 1 }, to: { id: 3 } },   // unrecognised endpoint shape
+      { to: { id: 3 } },               // missing from
+      'not-a-connection',              // garbage entry
+      { from: { instanceGuid: '99999999-9999-9999-9999-999999999999' }, to: { id: 3 } }, // guid resolves nothing
+    ]) as never)
+    assert.equal(graph.edges.length, 1)
+    assert.equal(graph.skippedConnections, 4)
+    assert.equal(graphStats(graph).skippedConnections, 4)
+  })
+
+  it('keeps out-of-document endpoints as boundary edges, not skipped', () => {
+    const graph = parseGhJsonGraph(withConns([conn(1, 99)]) as never)
+    assert.equal(graph.edges.length, 1)
+    assert.equal(graph.edges[0].boundary, true)
+    assert.equal(graph.skippedConnections, 0)
+    const stats = graphStats(graph)
+    assert.equal(stats.connections, 0)   // not drawable
+    assert.equal(stats.boundaryEdges, 1)
+  })
+
+  it('reports component id fields as numbers even when quoted', () => {
+    const graph = parseGhJsonGraph({ components: [{ id: '5' as never, name: 'A' }], connections: [conn(5, 5)] } as never)
+    assert.ok(graph.nodes.has(5))
   })
 })
 
