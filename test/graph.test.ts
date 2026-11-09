@@ -148,8 +148,8 @@ describe('schema validation', () => {
   })
 })
 
-describe('tolerant connection parsing', () => {
-  /** Canonical doc with ids 1-4; each case mutates only the connection shape. */
+describe('spec-strict connection parsing', () => {
+  /** Canonical doc with ids 1-3 + instanceGuids; each case mutates only the connection shape. */
   const withConns = (conns: unknown) => ({
     components: [
       { id: 1, name: 'A', instanceGuid: '11111111-1111-1111-1111-111111111111' },
@@ -158,52 +158,73 @@ describe('tolerant connection parsing', () => {
     ],
     connections: conns,
   })
-  const conn = (from: number, to: number) => ({ from: { id: from }, to: { id: to } })
+  const conn = (from: number, to: number) => ({ from: { id: from, paramIndex: 0 }, to: { id: to, paramIndex: 0 } })
   const parsedEdges = (doc: unknown) => parseGhJsonGraph(doc as never).edges.map(e => `${e.from}>${e.to}`)
 
-  it('resolves the endpoint spellings producers actually emit', () => {
+  it('parses the spec endpoint shape and the accepted instanceGuid-in-id reference', () => {
     const variants: [string, unknown][] = [
-      ['component key', [{ from: { component: 1 }, to: { component: 3 } }]],
-      ['componentId key', [{ from: { componentId: 1 }, to: { componentId: 3 } }]],
-      ['component_id key', [{ from: { component_id: 1 }, to: { component_id: 3 } }]],
-      ['string ids', [{ from: { id: '1' }, to: { id: '3' } }]],
-      ['guid in id key', [{ from: { id: '11111111-1111-1111-1111-111111111111' }, to: { id: '33333333-3333-3333-3333-333333333333' } }]],
-      ['instanceGuid endpoints', [{ from: { instanceGuid: '11111111-1111-1111-1111-111111111111' }, to: { instanceGuid: '33333333-3333-3333-3333-333333333333' } }]],
-      ['instance_guid endpoints', [{ from: { instance_guid: '11111111-1111-1111-1111-111111111111' }, to: { instance_guid: '33333333-3333-3333-3333-333333333333' } }]],
-      ['guid endpoints', [{ from: { guid: '11111111-1111-1111-1111-111111111111' }, to: { guid: '33333333-3333-3333-3333-333333333333' } }]],
-      ['bare numbers', [{ from: 1, to: 3 }]],
-      ['bare string ids', [{ from: '1', to: '3' }]],
-      ['bare guid strings', [{ from: '11111111-1111-1111-1111-111111111111', to: '33333333-3333-3333-3333-333333333333' }]],
-      ['flat ids', [{ from_id: 1, to_id: 3 }]],
-      ['source/target', [{ source: { id: 1 }, target: { id: 3 } }]],
-      ['src/dst', [{ src: { id: 1 }, dst: { id: 3 } }]],
+      ['canonical paramIndex', [conn(1, 3)]],
+      ['paramName', [{ from: { id: 1, paramName: 'Out' }, to: { id: 3, paramName: 'A' } }]],
+      ['guid in id key', [{ from: { id: '11111111-1111-1111-1111-111111111111', paramIndex: 0 }, to: { id: '33333333-3333-3333-3333-333333333333', paramIndex: 0 } }]],
     ]
     for (const [name, conns] of variants) {
       assert.deepEqual(parsedEdges(withConns(conns)), ['1>3'], name)
     }
   })
 
-  it('reads wires/links/edges aliases and object-map connection lists', () => {
-    for (const key of ['wires', 'links', 'edges']) {
-      assert.deepEqual(parsedEdges({ ...withConns(undefined), [key]: [conn(1, 3)] }), ['1>3'], key)
+  it('skips non-spec endpoint spellings — validation names the canonical fix', () => {
+    const variants: [string, unknown, RegExp][] = [
+      ['component key', [{ from: { component: 1, paramIndex: 0 }, to: { component: 3, paramIndex: 0 } }], /"component" is not a spec key/],
+      ['componentId key', [{ from: { componentId: 1, paramIndex: 0 }, to: { componentId: 3, paramIndex: 0 } }], /"componentId" is not a spec key/],
+      ['numeric-string ids', [{ from: { id: '1', paramIndex: 0 }, to: { id: '3', paramIndex: 0 } }], /must be an integer, not a numeric string/],
+      ['instanceGuid endpoint key', [{ from: { instanceGuid: '11111111-1111-1111-1111-111111111111', paramIndex: 0 }, to: { id: 3, paramIndex: 0 } }], /"instanceGuid" is not a spec key/],
+      ['bare endpoint values', [{ from: 1, to: 3 }], /must be an endpoint object/],
+      ['flat id pairs', [{ from_id: 1, to_id: 3 }], /not the spec shape/],
+      ['source/target keys', [{ source: { id: 1, paramIndex: 0 }, target: { id: 3, paramIndex: 0 } }], /"source" is not a spec key/],
+    ]
+    for (const [name, conns] of variants) {
+      const doc = withConns(conns)
+      const graph = parseGhJsonGraph(doc as never)
+      assert.equal(graph.edges.length, 0, name)
+      assert.equal(graph.skippedConnections, 1, name)
+      assert.match(validateGhJsonDocument(doc).map(i => i.message).join('\n'), variants.find(v => v[0] === name)![2], name)
     }
-    assert.deepEqual(parsedEdges(withConns({ '0': conn(1, 3) })), ['1>3'])
   })
 
-  it('falls back to per-component inputs entries when no top-level list exists', () => {
-    const doc = {
-      components: [{ id: 1, name: 'A' }, { id: 2, name: 'B', inputs: [{ from: { id: 1 } }] }],
+  it('flags non-canonical wire containers in validation', () => {
+    for (const key of ['wires', 'links', 'edges']) {
+      const doc = { ...withConns(undefined), [key]: [conn(1, 3)] }
+      assert.equal(parsedEdges(doc).length, 0, key)
+      assert.match(validateGhJsonDocument(doc).map(i => i.message).join('\n'), /must be named "connections"/, key)
     }
-    assert.deepEqual(parsedEdges(doc), ['1>2'])
+    const objMap = withConns({ '0': conn(1, 3) })
+    assert.equal(parsedEdges(objMap).length, 0)
+    assert.match(validateGhJsonDocument(objMap).map(i => i.message).join('\n'), /must be an array/)
+    const embedded = { components: [{ id: 1, name: 'A' }, { id: 2, name: 'B', inputs: [{ from: { id: 1 } }] }] }
+    assert.equal(parsedEdges(embedded).length, 0)
+    assert.match(validateGhJsonDocument(embedded).map(i => i.message).join('\n'), /top-level "connections"/)
+  })
+
+  it('flags endpoints referencing missing components unless marked boundary', () => {
+    const missing = withConns([conn(1, 99)])
+    assert.match(validateGhJsonDocument(missing).map(i => i.message).join('\n'), /references no component/)
+    const flagged = withConns([{ ...conn(1, 99), boundary: true }])
+    assert.equal(validateGhJsonDocument(flagged).filter(i => /references no component/.test(i.message)).length, 0)
+  })
+
+  it('requires paramIndex or paramName per spec §4.3', () => {
+    const doc = withConns([{ from: { id: 1 }, to: { id: 3 } }])
+    assert.match(validateGhJsonDocument(doc).map(i => i.message).join('\n'), /paramIndex.*paramName/)
+    assert.deepEqual(parsedEdges(doc), ['1>3']) // still drawable — validation, not parser, owns the rule
   })
 
   it('counts unresolvable entries as skippedConnections instead of dropping them silently', () => {
     const graph = parseGhJsonGraph(withConns([
       conn(1, 3),                      // good
-      { from: { foo: 1 }, to: { id: 3 } },   // unrecognised endpoint shape
-      { to: { id: 3 } },               // missing from
+      { from: { foo: 1, paramIndex: 0 }, to: { id: 3, paramIndex: 0 } },   // unrecognised endpoint shape
+      { to: { id: 3, paramIndex: 0 } },               // missing from
       'not-a-connection',              // garbage entry
-      { from: { instanceGuid: '99999999-9999-9999-9999-999999999999' }, to: { id: 3 } }, // guid resolves nothing
+      { from: { id: '99999999-9999-9999-9999-999999999999', paramIndex: 0 }, to: { id: 3, paramIndex: 0 } }, // guid resolves nothing
     ]) as never)
     assert.equal(graph.edges.length, 1)
     assert.equal(graph.skippedConnections, 4)
@@ -211,18 +232,13 @@ describe('tolerant connection parsing', () => {
   })
 
   it('keeps out-of-document endpoints as boundary edges, not skipped', () => {
-    const graph = parseGhJsonGraph(withConns([conn(1, 99)]) as never)
+    const graph = parseGhJsonGraph(withConns([{ ...conn(1, 99), boundary: true }]) as never)
     assert.equal(graph.edges.length, 1)
     assert.equal(graph.edges[0].boundary, true)
     assert.equal(graph.skippedConnections, 0)
     const stats = graphStats(graph)
     assert.equal(stats.connections, 0)   // not drawable
     assert.equal(stats.boundaryEdges, 1)
-  })
-
-  it('reports component id fields as numbers even when quoted', () => {
-    const graph = parseGhJsonGraph({ components: [{ id: '5' as never, name: 'A' }], connections: [conn(5, 5)] } as never)
-    assert.ok(graph.nodes.has(5))
   })
 })
 

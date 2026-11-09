@@ -149,60 +149,28 @@ export function parseGhJsonGraph(input: GhJsonDocument | string, options?: { str
   return { nodes, edges, groups, metadata: doc.metadata, skippedConnections }
 }
 
-/* ---------- tolerant connection resolution ---------- */
+/* ---------- connection resolution (spec §4) ---------- */
 
-/** Top-level keys producers have been seen to use for the wire list. */
-const CONNECTION_KEYS = ['connections', 'wires', 'links', 'edges'] as const
-/** Endpoint-pair key spellings (from side, then to side). */
-const FROM_KEYS = ['from', 'source', 'src', 'output'] as const
-const TO_KEYS = ['to', 'target', 'dst', 'input'] as const
-/** Component-reference keys on an endpoint, in preference order. */
-const ENDPOINT_ID_KEYS = ['id', 'component', 'componentId', 'component_id', 'componentIndex', 'component_index'] as const
-/** Instance-guid keys — resolved through the components' instanceGuid → integer id. */
-const ENDPOINT_GUID_KEYS = ['instanceGuid', 'instance_guid', 'guid'] as const
-const PARAM_INDEX_KEYS = ['paramIndex', 'param_index', 'param', 'index'] as const
-const PARAM_NAME_KEYS = ['paramName', 'param_name', 'name'] as const
-
-/** Numbers pass through; numeric strings coerce (AI writers quote ids often). */
-function coerceComponentId(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string' && value.trim() !== '') {
-    const n = Number(value)
-    if (Number.isFinite(n)) return n
+/**
+ * `id` MUST be a positive integer (§3.5) — that is the only coercion the
+ * parser performs. The one accepted extension: an `id` string matching a
+ * component's `instanceGuid` resolves through it, because spec §4.4
+ * acknowledges instanceGuid-keyed references as the mechanism for wiring
+ * canvas-bound objects. Every other spelling (numeric strings, `component`
+ * keys, flat pairs, `wires` lists, …) is non-spec — it counts under
+ * `skippedConnections` here and is reported by `validateGhJsonDocument`.
+ */
+function coerceComponentId(value: unknown, idByInstanceGuid?: Map<string, number>): number | undefined {
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 1) return value
+  if (idByInstanceGuid && typeof value === 'string' && value) {
+    return idByInstanceGuid.get(value.toLowerCase())
   }
   return undefined
 }
 
-/**
- * Every connection entry the document declares, from whichever container the
- * producer used: canonical `connections[]`, alias arrays (`wires`/`links`/`edges`),
- * object maps (`{ "0": {...} }` heals via values), or — when no top-level list
- * exists at all — per-component `inputs[]` entries carrying a `from`/`source`.
- */
+/** The wire list is `connections[]` — spec §4.1. No aliases. */
 function connectionEntries(doc: GhJsonDocument): unknown[] {
-  const record = doc as unknown as Record<string, unknown>
-  for (const key of CONNECTION_KEYS) {
-    const value = record[key]
-    if (Array.isArray(value)) return value
-    if (value && typeof value === 'object') return Object.values(value)
-  }
-  const embedded: unknown[] = []
-  for (const component of doc.components) {
-    const c = component as Record<string, unknown>
-    const componentId = coerceComponentId(c.id)
-    if (componentId === undefined) continue
-    for (const key of ['inputs', 'sources', 'connections'] as const) {
-      const list = c[key]
-      if (!Array.isArray(list)) continue
-      for (const entry of list) {
-        if (entry && typeof entry === 'object' &&
-          FROM_KEYS.some(k => (entry as Record<string, unknown>)[k] !== undefined)) {
-          embedded.push({ ...entry as object, to: { id: componentId } })
-        }
-      }
-    }
-  }
-  return embedded
+  return Array.isArray(doc.connections) ? doc.connections : []
 }
 
 interface ResolvedEndpoint {
@@ -212,57 +180,26 @@ interface ResolvedEndpoint {
 }
 
 /**
- * Resolve one endpoint to an integer component id. Accepts the canonical
- * `{ id }` plus the spellings AI writers and exporters actually emit:
- * `{ component|componentId|component_id|componentIndex }`, bare numbers,
- * `{ instanceGuid|instance_guid|guid }` (mapped through the components'
- * instanceGuid → id), bare numbers, and bare strings (numeric or
- * instanceGuid). Returns null when nothing usable
- * is found — the caller counts it as a skipped connection.
+ * Resolve one endpoint per spec §4.3: an object carrying `id` (integer, or
+ * the accepted instanceGuid string) plus `paramIndex`/`paramName`. Anything
+ * else returns null — the caller counts it as a skipped connection.
  */
 function resolveEndpoint(endpoint: unknown, idByInstanceGuid: Map<string, number>): ResolvedEndpoint | null {
-  if (typeof endpoint === 'number' && Number.isFinite(endpoint)) {
-    return { id: endpoint, paramIndex: null, paramName: null }
-  }
-  if (typeof endpoint === 'string' && endpoint) {
-    const id = coerceComponentId(endpoint) ?? idByInstanceGuid.get(endpoint.toLowerCase())
-    return id === undefined ? null : { id, paramIndex: null, paramName: null }
-  }
   if (!endpoint || typeof endpoint !== 'object') return null
   const o = endpoint as Record<string, unknown>
-  const paramIndex = PARAM_INDEX_KEYS.map(k => o[k]).find(v => typeof v === 'number' && Number.isFinite(v)) as number | undefined
-  const paramName = PARAM_NAME_KEYS.map(k => o[k]).find(v => typeof v === 'string' && v !== '') as string | undefined
-  for (const key of ENDPOINT_ID_KEYS) {
-    const v = o[key]
-    const id = coerceComponentId(v) ?? (typeof v === 'string' && v ? idByInstanceGuid.get(v.toLowerCase()) : undefined)
-    if (id !== undefined) return { id, paramIndex: paramIndex ?? null, paramName: paramName ?? null }
-  }
-  for (const key of ENDPOINT_GUID_KEYS) {
-    const guid = o[key]
-    if (typeof guid === 'string' && guid) {
-      const id = idByInstanceGuid.get(guid.toLowerCase())
-      return id === undefined ? null : { id, paramIndex: paramIndex ?? null, paramName: paramName ?? null }
-    }
-  }
-  return null
+  const id = coerceComponentId(o.id, idByInstanceGuid)
+  if (id === undefined) return null
+  const paramIndex = typeof o.paramIndex === 'number' && Number.isFinite(o.paramIndex) ? o.paramIndex : null
+  const paramName = typeof o.paramName === 'string' && o.paramName !== '' ? o.paramName : null
+  return { id, paramIndex, paramName }
 }
 
-/** Extract the from/to pair whatever spelling the producer used. */
+/** Extract the from/to pair — `from`/`to` are the only spec keys. */
 function resolveEndpoints(conn: unknown, idByInstanceGuid: Map<string, number>): { from: number; to: number; fromParam: number | string | null; toParam: number | string | null; boundary: boolean | undefined } | null {
   if (!conn || typeof conn !== 'object') return null
   const c = conn as Record<string, unknown>
-  // Flat spellings ({ from_id, to_id } / { source, target } with scalar values).
-  if (c.from === undefined && c.source === undefined && c.src === undefined && c.output === undefined) {
-    const flatFrom = coerceComponentId(c.from_id ?? c.source_id ?? c.src_id)
-    const flatTo = coerceComponentId(c.to_id ?? c.target_id ?? c.dst_id)
-    if (flatFrom !== undefined && flatTo !== undefined) {
-      return { from: flatFrom, to: flatTo, fromParam: null, toParam: null, boundary: c.boundary === true }
-    }
-  }
-  const fromEp = FROM_KEYS.map(k => c[k]).find(v => v !== undefined)
-  const toEp = TO_KEYS.map(k => c[k]).find(v => v !== undefined)
-  const from = resolveEndpoint(fromEp, idByInstanceGuid)
-  const to = resolveEndpoint(toEp, idByInstanceGuid)
+  const from = resolveEndpoint(c.from, idByInstanceGuid)
+  const to = resolveEndpoint(c.to, idByInstanceGuid)
   if (!from || !to) return null
   return {
     from: from.id, to: to.id,
