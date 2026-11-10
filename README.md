@@ -39,8 +39,11 @@ const card = ghJsonCard(document)              // { stats, svg } in one call
 - **SVG** — `renderGraphSvg` draws the real canvas topology from pivots
   (deterministic grid fallback when positions are missing). Pure string
   output — render server-side, embed anywhere; no DOM needed. Options:
-  `width`, `padding`, `theme` (`'dark'`|`'light'`) and `background` (opaque
-  fill behind the topology — transparent when omitted).
+  `width`, `padding`, `theme` (`'dark'`|`'light'`), `background` (opaque
+  fill — transparent when omitted), `nodeRadius` (default 4, constant
+  across documents) and `minSpacing` (default 12 — dense documents widen
+  the viewBox past `width` instead of collapsing spacing, so dots and
+  wires look uniform on every card).
 
 ## Develop
 

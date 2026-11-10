@@ -13,6 +13,18 @@ export interface RenderOptions {
    * the SVG stays transparent when omitted so cards can own their backdrop.
    */
   background?: string
+  /**
+   * Node radius in viewport units (default 4). Constant across documents —
+   * dots look identical on every card regardless of definition size.
+   */
+  nodeRadius?: number
+  /**
+   * Minimum spacing between node centers in viewport units (default 12).
+   * When a dense document cannot fit at this spacing, the viewBox widens
+   * past `width` instead of collapsing spacing under the dots — elements
+   * stay readable and near-uniform rather than merging into mush.
+   */
+  minSpacing?: number
 }
 
 const escapeXml = (value: string) =>
@@ -41,7 +53,15 @@ export function renderGraphSvg(graph: Graph, options: RenderOptions = {}): strin
 
   const naturalW = Math.max(layout.depth - 1, 0) * CELL_X + CELL_X
   const naturalH = Math.max(layout.height - 1, 0) * CELL_Y + CELL_Y
-  const scale = (width - padding * 2) / naturalW
+  const minSpacing = options.minSpacing ?? 12
+  const scale = Math.max(
+    (width - padding * 2) / naturalW,
+    minSpacing / CELL_X,
+    (minSpacing * 0.6) / CELL_Y,
+  )
+  // Viewport may exceed `width` when the spacing floor kicks in — elements
+  // stay constant-sized and only the output ratio shrinks them slightly.
+  const viewW = Math.max(width, Math.ceil(naturalW * scale + padding * 2))
   const height = Math.max(Math.round(naturalH * scale + padding * 2), Math.round(width / 8))
 
   const at = (id: number) => {
@@ -56,13 +76,17 @@ export function renderGraphSvg(graph: Graph, options: RenderOptions = {}): strin
   const edgeColor = dark ? '#5b6a7d' : '#94a3b8'
   const nodeColor = dark ? '#8fb8d8' : '#3b6d94'
   const boundaryColor = dark ? '#4b5563' : '#b6c2cf'
-  const nodeR = Math.max(2.2, Math.min(6, 30 * scale / Math.max(layout.height, 1) ** 0.5))
+  const nodeR = options.nodeRadius ?? 4
 
+  // When the viewBox outgrows `width`, the output scales by width/viewW —
+  // report the rendered aspect in the height attribute so cards don't
+  // letterbox. Elements stay constant in viewBox units.
+  const outH = Math.round(height * width / viewW)
   const parts: string[] = [
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" preserveAspectRatio="xMidYMid meet">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewW} ${height}" width="${width}" height="${outH}" role="img" preserveAspectRatio="xMidYMid meet">`,
   ]
   if (options.background) {
-    parts.push(`<rect width="${width}" height="${height}" fill="${options.background}" rx="6"/>`)
+    parts.push(`<rect width="${viewW}" height="${height}" fill="${options.background}" rx="6"/>`)
   }
   for (const edge of graph.edges) {
     const a = at(edge.from)

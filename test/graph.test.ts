@@ -118,6 +118,30 @@ describe('renderGraphSvg', () => {
     assert.ok(svg.startsWith('<svg'))
     assert.ok(!svg.includes('<circle'))
   })
+
+  it('keeps dot and wire size constant across document scales', () => {
+    const tiny = renderGraphSvg(parseGhJsonGraph(sample))
+    const big = renderGraphSvg(parseGhJsonGraph({
+      components: Array.from({ length: 80 }, (_, i) => ({ id: i + 1, name: `C${i}`, pivot: `${i * 100},${(i % 8) * 60}` })),
+      connections: Array.from({ length: 79 }, (_, i) => ({ from: { id: i + 1 }, to: { id: i + 2 } })),
+    }))
+    for (const svg of [tiny, big]) {
+      assert.match(svg, /r="4(\.0)?"/)
+      assert.match(svg, /stroke-width="1\.5"/)
+    }
+  })
+
+  it('widens the viewBox instead of collapsing spacing on dense documents', () => {
+    const svg = renderGraphSvg(parseGhJsonGraph({
+      components: Array.from({ length: 120 }, (_, i) => ({ id: i + 1, name: `C${i}`, pivot: `${i * 100},${(i % 10) * 60}` })),
+      connections: Array.from({ length: 119 }, (_, i) => ({ from: { id: i + 1 }, to: { id: i + 2 } })),
+    }), { width: 320 })
+    const vb = svg.match(/viewBox="0 0 (\d+) \d+"/)
+    assert.ok(Number(vb![1]) > 320, 'dense doc widens the viewport instead of squeezing')
+    // nodes still fit: last dot's cx stays inside the viewBox
+    const cxs = [...svg.matchAll(/cx="([\d.]+)"/g)].map(m => Number(m[1]))
+    assert.ok(Math.max(...cxs) <= Number(vb![1]))
+  })
 })
 
 describe('schema validation', () => {
