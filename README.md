@@ -21,11 +21,11 @@ const card = ghJsonCard(document)              // { stats, svg } in one call
   fallback when omitted). Carry `name`, `nickName`, `library`,
   `componentGuid`, pivot position, input/output counts, and group.
 - **Edges** — `connections` entries: `from`/`to` component ids plus the
-  parameter index or name, per spec §4. The parser is strict to the spec —
-  the one accepted extension is an `id` string matching a component's
-  `instanceGuid` (spec §4.4's mechanism for canvas-bound references).
-  Non-spec spellings (`wires` lists, `component` keys, numeric-string ids,
-  flat pairs, embedded `inputs[]`) are **not** silently healed: entries
+  parameter index or name, per spec §4. Accepted beyond the canonical
+  integer `id`: an integer encoded as a string (coerced deterministically)
+  and an `id` string matching a component's `instanceGuid` (spec §4.4's
+  canvas-bound reference shape). Other spellings (`wires` lists,
+  `component` keys, flat pairs, embedded `inputs[]`) are not healed: entries
   count under `graph.skippedConnections`, and `validateGhJsonDocument`
   reports each with an actionable message naming the canonical shape.
   Edges marked `boundary` (or referencing missing components) are kept and

@@ -152,18 +152,21 @@ export function parseGhJsonGraph(input: GhJsonDocument | string, options?: { str
 /* ---------- connection resolution (spec §4) ---------- */
 
 /**
- * `id` MUST be a positive integer (§3.5) — that is the only coercion the
- * parser performs. The one accepted extension: an `id` string matching a
- * component's `instanceGuid` resolves through it, because spec §4.4
- * acknowledges instanceGuid-keyed references as the mechanism for wiring
- * canvas-bound objects. Every other spelling (numeric strings, `component`
+ * `id` references per spec §4.3: positive integers pass through; an
+ * integer encoded as a string coerces deterministically; an `id` string
+ * matching a component's `instanceGuid` resolves through it — the accepted
+ * canvas-bound reference shape (§4.4). Every other spelling (`component`
  * keys, flat pairs, `wires` lists, …) is non-spec — it counts under
  * `skippedConnections` here and is reported by `validateGhJsonDocument`.
  */
 function coerceComponentId(value: unknown, idByInstanceGuid?: Map<string, number>): number | undefined {
   if (typeof value === 'number' && Number.isInteger(value) && value >= 1) return value
-  if (idByInstanceGuid && typeof value === 'string' && value) {
-    return idByInstanceGuid.get(value.toLowerCase())
+  if (typeof value === 'string' && value) {
+    if (/^\d+$/.test(value)) {
+      const n = Number(value)
+      if (n >= 1 && Number.isInteger(n)) return n
+    }
+    return idByInstanceGuid?.get(value.toLowerCase())
   }
   return undefined
 }
