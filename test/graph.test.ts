@@ -166,9 +166,12 @@ describe('spec-strict connection parsing', () => {
       ['canonical paramIndex', [conn(1, 3)]],
       ['paramName', [{ from: { id: 1, paramName: 'Out' }, to: { id: 3, paramName: 'A' } }]],
       ['guid in id key', [{ from: { id: '11111111-1111-1111-1111-111111111111', paramIndex: 0 }, to: { id: '33333333-3333-3333-3333-333333333333', paramIndex: 0 } }]],
+      ['numeric-string ids coerce', [{ from: { id: '1', paramIndex: 0 }, to: { id: '3', paramIndex: 0 } }]],
     ]
     for (const [name, conns] of variants) {
       assert.deepEqual(parsedEdges(withConns(conns)), ['1>3'], name)
+      // …and validate clean: all are accepted spec shapes.
+      assert.equal(validateGhJsonDocument(withConns(conns)).length, 0, name)
     }
   })
 
@@ -176,7 +179,6 @@ describe('spec-strict connection parsing', () => {
     const variants: [string, unknown, RegExp][] = [
       ['component key', [{ from: { component: 1, paramIndex: 0 }, to: { component: 3, paramIndex: 0 } }], /"component" is not a spec key/],
       ['componentId key', [{ from: { componentId: 1, paramIndex: 0 }, to: { componentId: 3, paramIndex: 0 } }], /"componentId" is not a spec key/],
-      ['numeric-string ids', [{ from: { id: '1', paramIndex: 0 }, to: { id: '3', paramIndex: 0 } }], /must be an integer, not a numeric string/],
       ['instanceGuid endpoint key', [{ from: { instanceGuid: '11111111-1111-1111-1111-111111111111', paramIndex: 0 }, to: { id: 3, paramIndex: 0 } }], /"instanceGuid" is not a spec key/],
       ['bare endpoint values', [{ from: 1, to: 3 }], /must be an endpoint object/],
       ['flat id pairs', [{ from_id: 1, to_id: 3 }], /not the spec shape/],

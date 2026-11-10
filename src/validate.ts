@@ -97,8 +97,11 @@ function lintGhJsonConnections(doc: unknown): ValidationIssue[] {
         if (!Number.isInteger(ep.id) || ep.id < 1) issues.push({ path: `${epPath}/id`, message: `${epPath}/id must be a positive integer` })
         else if (!ids.has(ep.id) && conn.boundary !== true) issues.push({ path: `${epPath}/id`, message: `${epPath}/id references no component in this document — declare it or mark the connection "boundary": true` })
       } else if (typeof ep.id === 'string') {
-        if (/^\d+$/.test(ep.id)) issues.push({ path: `${epPath}/id`, message: `${epPath}/id must be an integer, not a numeric string` })
-        else if (!guids.has(ep.id.toLowerCase())) issues.push({ path: `${epPath}/id`, message: `${epPath}/id references no component instanceGuid in this document` })
+        // Numeric strings coerce deterministically (spec §4.3); any other
+        // string must resolve a component instanceGuid.
+        if (!/^\d+$/.test(ep.id) && !guids.has(ep.id.toLowerCase())) {
+          issues.push({ path: `${epPath}/id`, message: `${epPath}/id references no component instanceGuid in this document` })
+        }
       } else {
         issues.push({ path: `${epPath}/id`, message: `${epPath}/id must be a positive integer` })
       }

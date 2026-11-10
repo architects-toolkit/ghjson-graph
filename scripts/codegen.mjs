@@ -5,7 +5,7 @@
 import { compileFromFile } from 'json-schema-to-typescript'
 import { readFile, writeFile } from 'node:fs/promises'
 
-const types = await compileFromFile(new URL('../schema/ghjson.schema.json', import.meta.url).pathname, {
+const types = await compileFromFile(fileURLToPath(new URL('../schema/ghjson.schema.json', import.meta.url)), {
   bannerComment: '// GENERATED from schema/ghjson.schema.json — do not edit by hand; run `pnpm codegen`.',
   additionalProperties: false,
   unknownAny: true,
@@ -13,8 +13,9 @@ const types = await compileFromFile(new URL('../schema/ghjson.schema.json', impo
 
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const schemaRoot = new URL('../schema/', import.meta.url)
+const schemaRoot = fileURLToPath(new URL('../schema/', import.meta.url))
 const walk = async (dir) => {
   const entries = await readdir(dir, { withFileTypes: true })
   const files = []
@@ -25,11 +26,11 @@ const walk = async (dir) => {
   }
   return files
 }
-const files = await walk(schemaRoot.pathname)
+const files = await walk(schemaRoot)
 const schemas = []
 for (const f of files.sort()) {
   const doc = JSON.parse(await readFile(f, 'utf8'))
-  schemas.push({ rel: f.slice(schemaRoot.pathname.length), doc })
+  schemas.push({ rel: f.slice(schemaRoot.length).replaceAll('\\', '/'), doc })
 }
 const main = schemas.find(s => s.rel === 'ghjson.schema.json').doc
 
